@@ -1,0 +1,34 @@
+# Environment files
+.env
+*.env
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# PHP
+vendor/
+composer.lock
+
+# Logs
+*.log
+logs/
+
+# Docker
+*.docker
+Dockerfile*
+
+# Kubernetes
+*.kube
+*.yaml.bak
+
+# Temporary files
+*.swp
+*.swo
+*~
+
+# IDEs
+.idea/
+.vscode/
+*.code-workspace
