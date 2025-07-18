@@ -1,0 +1,104 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: 'development'
+    cluster: 'dev-cluster'
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 5s
+    metrics_path: /metrics
+
+  # Infrastructure Services
+  - job_name: 'keycloak-dev'
+    static_configs:
+      - targets: ['keycloak:8080']
+    metrics_path: /metrics
+    scrape_interval: 30s
+    
+  - job_name: 'rabbitmq-dev'
+    static_configs:
+      - targets: ['rabbitmq:15692']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  - job_name: 'minio-dev'
+    static_configs:
+      - targets: ['minio:9000']
+    metrics_path: /minio/v2/metrics/cluster
+    scrape_interval: 30s
+
+  - job_name: 'nexus-dev'
+    static_configs:
+      - targets: ['nexus:8081']
+    metrics_path: /service/metrics/prometheus
+    scrape_interval: 60s
+
+  # GitLab metrics (if enabled)
+  - job_name: 'gitlab-dev'
+    static_configs:
+      - targets: ['gitlab:80']
+    metrics_path: /-/metrics
+    scrape_interval: 60s
+
+  # Jenkins metrics (if prometheus plugin is installed)
+  - job_name: 'jenkins-dev'
+    static_configs:
+      - targets: ['jenkins:8081']
+    metrics_path: /prometheus/
+    scrape_interval: 60s
+
+  # NestJS Application (when running)
+  - job_name: 'nestjs-app-dev'
+    static_configs:
+      - targets: ['host.docker.internal:3000']
+    metrics_path: /metrics
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # PostgreSQL (app database) - requires postgres_exporter
+  - job_name: 'postgres-app-dev'
+    static_configs:
+      - targets: ['host.docker.internal:5435']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # Redis (app cache) - requires redis_exporter  
+  - job_name: 'redis-app-dev'
+    static_configs:
+      - targets: ['host.docker.internal:6380']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # Docker container metrics (if docker daemon metrics are enabled)
+  - job_name: 'docker-dev'
+    static_configs:
+      - targets: ['host.docker.internal:9323']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # Custom development targets
+  - job_name: 'dev-targets'
+    file_sd_configs:
+      - files:
+          - '/etc/prometheus/dev-targets.yml'
+        refresh_interval: 10s
+
+# Alerting configuration (for development)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# Development-specific recording rules
+# rule_files:
+#   - "dev_rules.yml"

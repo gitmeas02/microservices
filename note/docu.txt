@@ -1,0 +1,351 @@
+# ✅ COMPLETE DEVOPS INFRASTRUCTURE SETUP
+
+# =============================================================================
+# 🚀 INFRASTRUCTURE SERVICES (Keycloak + RabbitMQ + MinIO + GitLab + Jenkins + Nexus)
+# =============================================================================
+
+# QUICK START - Choose your environment:
+infrastructure-manager.bat         # Interactive management script
+
+# 1. LOCAL DEVELOPMENT (All services + NestJS app)
+docker-compose -f docker-compose.dev.yml -f docker-compose.infrastructure.dev.yml up -d
+
+# 2. DEVELOPMENT INFRASTRUCTURE ONLY
+docker-compose -f docker-compose.infrastructure.dev.yml up -d
+
+# 3. PRODUCTION INFRASTRUCTURE
+docker-compose -f docker-compose.infrastructure.prod.yml up -d
+
+# =============================================================================
+# 🌐 SERVICE URLS & CREDENTIALS
+# =============================================================================
+- NestJS App:     http://localhost:3000                    # -
+- Keycloak:       http://localhost:8080                    # admin/dev123
+- RabbitMQ:       http://localhost:15672                   # dev/dev123
+- MinIO:          http://localhost:9001                    # devadmin/dev123456
+- GitLab:         http://localhost:8082                    # root/dev123456
+- Jenkins:        http://localhost:8081                    # admin/admin123
+- Nexus:          http://localhost:8083                    # admin/admin123
+- Prometheus:     http://localhost:9090                    # -
+- Grafana:        http://localhost:3001                    # admin/admin123
+
+# =============================================================================
+# 📊 INFRASTRUCTURE MANAGEMENT
+# =============================================================================
+
+# Health Check All Services
+curl http://localhost:3000/health      # NestJS App
+curl http://localhost:8080/health/ready # Keycloak  
+curl http://localhost:15672/api/overview -u dev:dev123 # RabbitMQ
+curl http://localhost:9000/minio/health/live # MinIO
+curl http://localhost:8082/-/health     # GitLab
+curl http://localhost:8081/login        # Jenkins
+curl http://localhost:8083/service/rest/v1/status # Nexus
+
+# View Logs
+docker-compose -f docker-compose.infrastructure.dev.yml logs -f keycloak
+docker-compose -f docker-compose.infrastructure.dev.yml logs -f rabbitmq
+docker-compose -f docker-compose.infrastructure.dev.yml logs -f minio
+docker-compose -f docker-compose.infrastructure.dev.yml logs -f gitlab
+docker-compose -f docker-compose.infrastructure.dev.yml logs -f jenkins
+docker-compose -f docker-compose.infrastructure.dev.yml logs -f nexus
+
+# Stop All Services
+docker-compose -f docker-compose.dev.yml -f docker-compose.infrastructure.dev.yml down
+
+# =============================================================================
+# 🔄 CI/CD PIPELINE SETUP
+# =============================================================================
+
+# GitLab CI/CD Pipeline (.gitlab-ci.yml)
+# - Automated testing (unit, integration, e2e)
+# - Security scanning (dependency audit, container scan)
+# - Multi-environment deployment (dev, staging, prod)
+# - Artifact storage in Nexus
+# - Notifications via RabbitMQ
+
+# Jenkins Pipeline (Jenkinsfile.dev)
+# - Parallel test execution
+# - Quality gates with SonarQube
+# - Docker image building
+# - Kubernetes deployment
+# - Slack/email notifications
+
+# =============================================================================
+# 🔐 KEYCLOAK AUTHENTICATION
+# =============================================================================
+
+# Development Realm: nestjs-dev
+# Pre-configured clients:
+# - nestjs-app (Backend API)
+# - vue-frontend (Frontend SPA)
+
+# Pre-configured users:
+# - admin (admin/admin123) - Administrator role
+# - developer (developer/dev123) - Developer role  
+# - testuser (testuser/test123) - User role
+
+# Integration with NestJS:
+KEYCLOAK_URL=http://keycloak:8080
+KEYCLOAK_REALM=nestjs-dev
+KEYCLOAK_CLIENT_ID=nestjs-app
+KEYCLOAK_CLIENT_SECRET=nestjs-dev-secret
+
+# =============================================================================
+# 📨 RABBITMQ MESSAGE QUEUES
+# =============================================================================
+
+# Pre-configured exchanges and queues:
+# - nestjs.events.exchange (topic)
+# - nestjs.notifications.exchange (direct)
+# - nestjs.events queue with TTL
+# - nestjs.notifications queue
+# - nestjs.deadletter queue
+
+# Connection URL:
+RABBITMQ_URL=amqp://dev:dev123@rabbitmq:5672/dev
+
+# Test message publishing:
+curl -X POST http://localhost:15672/api/exchanges/dev/nestjs.events.exchange/publish \
+-u dev:dev123 \
+-H "Content-Type: application/json" \
+-d '{"properties":{},"routing_key":"user.created","payload":"test message","payload_encoding":"string"}'
+
+# =============================================================================
+# 💾 MINIO OBJECT STORAGE
+# =============================================================================
+
+# S3-compatible object storage for:
+# - File uploads from NestJS app
+# - CI/CD artifact storage
+# - Backup storage
+# - GitLab runner cache
+
+# Connection details:
+MINIO_ENDPOINT=minio
+MINIO_PORT=9000
+MINIO_ACCESS_KEY=devadmin
+MINIO_SECRET_KEY=dev123456
+MINIO_BUCKET=nestjs-dev-bucket
+
+# =============================================================================
+# 🦊 GITLAB CI/CD
+# =============================================================================
+
+# GitLab includes:
+# - Git repository hosting
+# - Built-in CI/CD pipelines
+# - Docker container registry
+# - Package registry
+# - Issue tracking
+# - Wiki documentation
+
+# Repository URL: http://localhost:8082/root/nestjs-app
+# Docker Registry: http://localhost:8082/root/nestjs-app/container_registry
+
+# =============================================================================
+# 🏗️ JENKINS BUILD AUTOMATION
+# =============================================================================
+
+# Jenkins Configuration as Code (CasC):
+# - Pre-installed plugins
+# - Keycloak SSO integration
+# - Docker & Kubernetes agents
+# - Pipeline job templates
+# - Credential management
+
+# Job Types:
+# - Development pipeline (auto-trigger on push)
+# - Production pipeline (manual approval)
+# - Database backup jobs
+# - Infrastructure health checks
+
+# =============================================================================
+# 📦 NEXUS REPOSITORY MANAGER
+# =============================================================================
+
+# Repository types:
+# - npm proxy (npmjs.org proxy)
+# - npm hosted (private packages)
+# - Docker hosted (private images)
+# - Docker proxy (Docker Hub proxy)
+
+# Usage in CI/CD:
+# - npm install via Nexus proxy
+# - Docker image storage
+# - Artifact versioning
+# - Security scanning integration
+
+# =============================================================================
+# 📊 MONITORING & OBSERVABILITY
+# =============================================================================
+
+# Prometheus metrics collection from:
+# - NestJS application (/metrics endpoint)
+# - PostgreSQL database
+# - Redis cache
+# - RabbitMQ message broker
+# - All infrastructure services
+
+# Grafana dashboards for:
+# - Application performance
+# - Infrastructure health
+# - CI/CD pipeline metrics
+# - Security alerts
+
+# =============================================================================
+# 🛠️ BACKUP & RECOVERY
+# =============================================================================
+
+# Automated backup script:
+infrastructure-manager.bat (option 7)
+
+# Manual backup commands:
+# PostgreSQL
+docker exec postgres pg_dump -U postgres nestjs_db > backup/db_$(date +%Y%m%d).sql
+
+# GitLab data
+docker run --rm -v gitlab_dev_data:/data -v %cd%\backup:/backup alpine tar czf /backup/gitlab_backup.tar.gz -C /data .
+
+# Jenkins data  
+docker run --rm -v jenkins_dev_home:/data -v %cd%\backup:/backup alpine tar czf /backup/jenkins_backup.tar.gz -C /data .
+
+# =============================================================================
+# 🔧 ENVIRONMENT CONFIGURATIONS
+# =============================================================================
+
+# Development (.env.development) - Updated with infrastructure services
+# Production (.env.production) - Production-ready with security
+# Test (.env.test) - Isolated testing environment
+
+# Infrastructure environment variables for production:
+# KC_DB_PASSWORD, KC_ADMIN_PASSWORD, RABBITMQ_PASSWORD, etc.
+
+# =============================================================================
+# ⚡ PRODUCTION DEPLOYMENT CHECKLIST
+# =============================================================================
+
+# 1. SSL/TLS Certificates
+# - Set up SSL certificates for all services
+# - Configure reverse proxy (Nginx)
+# - Enable HTTPS redirects
+
+# 2. Security Configuration
+# - Change all default passwords
+# - Set up proper firewall rules
+# - Enable audit logging
+# - Configure backup encryption
+
+# 3. Performance Tuning
+# - Database connection pooling
+# - Redis memory optimization
+# - RabbitMQ clustering
+# - Load balancer configuration
+
+# 4. Monitoring Setup
+# - Configure alerting rules
+# - Set up log aggregation
+# - Enable uptime monitoring
+# - Configure notification channels
+
+# 🎯 NEXT STEPS:
+# 1. Run: infrastructure-manager.bat
+# 2. Choose option 1 (Local Development)
+# 3. Wait 5-10 minutes for all services to start
+# 4. Access services using URLs above
+# 5. Start developing with full DevOps pipeline!
+
+# ✅ INFRASTRUCTURE SETUP COMPLETE - Production-Ready DevOps Environment!
+
+# Production deployment
+deploy.bat
+
+# Or manually
+docker-compose -f docker-compose.prod.yml up -d --build
+-------------------------------------------------------
+# Start development environment
+docker-compose -f docker-compose.dev.yml up -d
+
+# Or using Makefile (if make is installed)
+make dev
+-------------
+    Makefile
+-------------
+make help          # Show all available commands
+make dev           # Start development environment
+make prod          # Start production environment
+make logs          # View logs
+make clean         # Clean Docker resources
+make deploy        # Quick production deployment
+make db-backup     # Backup database 
+--------------------------------------------
+# Access database
+docker-compose -f docker-compose.dev.yml exec postgres psql -U postgres -d nestjs_db
+
+# Run migrations (when needed)
+docker-compose -f docker-compose.dev.yml exec nestjs-app npm run migration:run
+
+# Generate new migration
+docker-compose -f docker-compose.dev.yml exec nestjs-app npm run migration:generate UserUpdate
+-------------------------------------------------
+# TypeORM Scripts (Available after installing dependencies with --legacy-peer-deps)
+npm install --legacy-peer-deps                 # Install dependencies
+npm run migration:generate                      # Generate migration from entity changes
+npm run migration:run                          # Run pending migrations
+npm run migration:show                         # Show migration status
+npm run migration:revert                       # Revert last migration
+npm run schema:sync                            # Sync schema (development only)
+npm run schema:drop                            # Drop schema (danger!)
+
+# ✅ SETUP COMPLETE - TypeORM Integration Working!
+# API Endpoints:
+- GET /health           # Health check with database status
+- GET /users           # Get all users  
+- POST /users          # Create user
+- GET /users/:id       # Get user by ID
+- PATCH /users/:id     # Update user
+- DELETE /users/:id    # Delete user
+
+# Test Commands:
+curl http://localhost:3000/health
+curl http://localhost:3000/users
+curl -X POST http://localhost:3000/users -H "Content-Type: application/json" -d "{\"email\":\"test@example.com\",\"name\":\"Test User\"}"
+npm install --legacy-peer-deps (for resolve for clict)
+
+# ✅ DATABASE SEEDING METHODS:
+
+# Method 1: Quick Seeding Script (Recommended)
+seed.bat                    # Interactive seeding menu for Windows
+
+# Method 2: API Seeding (Manual via HTTP requests)
+curl -X POST http://localhost:3000/users -H "Content-Type: application/json" -d "{\"email\":\"admin@example.com\",\"name\":\"Admin User\"}"
+curl -X POST http://localhost:3000/users -H "Content-Type: application/json" -d "{\"email\":\"user@example.com\",\"name\":\"Regular User\"}"
+curl -X POST http://localhost:3000/users -H "Content-Type: application/json" -d "{\"email\":\"dev@example.com\",\"name\":\"Developer User\"}"
+
+# Method 3: Direct Database Seeding (Most Reliable)
+docker-compose -f docker-compose.dev.yml exec postgres psql -U postgres -d nestjs_db -c "INSERT INTO users (email, name) VALUES ('seed@example.com', 'Seed User'), ('manager@example.com', 'Manager User') ON CONFLICT (email) DO NOTHING;"
+
+# Method 4: TypeORM Seeder Service (Inside Container)
+docker-compose -f docker-compose.dev.yml exec nestjs-app npm run seed:container
+
+# Method 5: Reset and Reseed Database (Nuclear Option)
+docker-compose -f docker-compose.dev.yml down
+docker volume rm lesson1_nest_js_postgres_dev_data
+docker-compose -f docker-compose.dev.yml up -d
+# This recreates the database and runs init.sql automatically
+docker volume ls
+# Method 6: SQL File Seeding (Automatic on first run)
+# Edit lesson1/setup/init.sql to add your seed data
+# Data is loaded automatically when PostgreSQL container starts fresh
+
+---------------------
+# DATABASE ACCESS COMMANDS:
+docker-compose -f docker-compose.dev.yml exec postgres bash
+psql -U postgres -d nestjs_db
+\dt                    # List all tables
+\d users              # Describe users table structure
+SELECT * FROM users;  # View all users
+\q                    # Exit psql
+exit                  # Exit container
+-------------------------
+curl -X POST http://localhost:3000/users -H "Content-Type: application/json" -d "{\"email\":\"dev@example.com\",\"name\":\"Developer User\"}"

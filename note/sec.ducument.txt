@@ -1,0 +1,208 @@
+@echo off
+REM filepath: d:\Nest JS\Nest_IP\lesson1_nest_js\development-manager.bat
+title Development Environment Manager
+color 0A
+
+:MAIN_MENU
+cls
+echo.
+echo ╔══════════════════════════════════════════════════════════════════╗
+echo ║                    DEVELOPMENT ENVIRONMENT MANAGER               ║
+echo ╠══════════════════════════════════════════════════════════════════╣
+echo ║                                                                  ║
+echo ║  Choose your development environment setup:                     ║
+echo ║                                                                  ║
+echo ║  1. 🚀 FULL DEV ENVIRONMENT (Infrastructure + App)              ║
+echo ║     └─ All services: GitLab, Jenkins, Keycloak, NestJS, etc.    ║
+echo ║                                                                  ║
+echo ║  2. 🔧 INFRASTRUCTURE ONLY (Services for development)           ║
+echo ║     └─ Keycloak, RabbitMQ, MinIO, GitLab, Jenkins, Nexus        ║
+echo ║                                                                  ║
+echo ║  3. 🎯 APPLICATION ONLY (NestJS + Database)                      ║
+echo ║     └─ NestJS, PostgreSQL, Redis                                ║
+echo ║                                                                  ║
+echo ║  4. 📊 VIEW STATUS (Check running services)                     ║
+echo ║                                                                  ║
+echo ║  5. 🔍 VIEW LOGS (Service logs)                                 ║
+echo ║                                                                  ║
+echo ║  6. 🛑 STOP ALL (Stop everything)                               ║
+echo ║                                                                  ║
+echo ║  7. 🧹 CLEAN UP (Remove containers and volumes)                 ║
+echo ║                                                                  ║
+echo ║  8. ❌ EXIT                                                      ║
+echo ║                                                                  ║
+echo ╚══════════════════════════════════════════════════════════════════╝
+echo.
+set /p choice="Enter your choice (1-8): "
+
+if "%choice%"=="1" goto FULL_DEV
+if "%choice%"=="2" goto INFRASTRUCTURE_ONLY
+if "%choice%"=="3" goto APPLICATION_ONLY
+if "%choice%"=="4" goto VIEW_STATUS
+if "%choice%"=="5" goto VIEW_LOGS
+if "%choice%"=="6" goto STOP_ALL
+if "%choice%"=="7" goto CLEAN_UP
+if "%choice%"=="8" goto EXIT
+goto MAIN_MENU
+
+:FULL_DEV
+echo.
+echo 🚀 Starting FULL Development Environment...
+echo This includes: Infrastructure + NestJS Application
+echo.
+echo 📦 Pulling latest images...
+docker-compose -f docker-compose.infrastructure.dev.yml pull
+docker-compose -f docker-compose.dev.yml pull
+echo.
+echo 🏗️ Starting infrastructure services first...
+docker-compose -f docker-compose.infrastructure.dev.yml up -d
+echo.
+echo ⏳ Waiting 60 seconds for infrastructure to stabilize...
+timeout /t 60 /nobreak
+echo.
+echo 🚀 Starting application services...
+docker-compose -f docker-compose.dev.yml up -d
+if %errorlevel% neq 0 (
+    echo ❌ Failed to start services!
+    pause
+    goto MAIN_MENU
+)
+echo.
+echo ✅ Full development environment started successfully!
+echo.
+echo 🌐 Available Services:
+echo ─────────────────────────────────────────────────────────
+echo │ SERVICE          │ URL                    │ CREDENTIALS    │
+echo ─────────────────────────────────────────────────────────
+echo │ 🚀 NestJS App    │ http://localhost:3000  │ -              │
+echo │ 🛡️ Keycloak      │ http://localhost:8080  │ admin/dev123   │
+echo │ 🐰 RabbitMQ      │ http://localhost:15672 │ dev/dev123     │
+echo │ 💾 MinIO         │ http://localhost:9001  │ devadmin/dev123456 │
+echo │ 🦊 GitLab        │ http://localhost:8082  │ root/dev123456 │
+echo │ 🏗️ Jenkins       │ http://localhost:8081  │ admin/admin123 │
+echo │ 📦 Nexus         │ http://localhost:8083  │ admin/admin123 │
+echo │ 🗄️ PostgreSQL    │ localhost:5435         │ postgres/password │
+echo │ ⚡ Redis         │ localhost:6380         │ -              │
+echo ─────────────────────────────────────────────────────────
+echo.
+echo 💡 Notes:
+echo    - GitLab may take 5-10 minutes to fully start
+echo    - Jenkins may take 2-3 minutes to be ready
+echo    - All services are connected and can communicate
+echo.
+pause
+goto MAIN_MENU
+
+:INFRASTRUCTURE_ONLY
+echo.
+echo 🔧 Starting Infrastructure Services Only...
+docker-compose -f docker-compose.infrastructure.dev.yml up -d
+if %errorlevel% neq 0 (
+    echo ❌ Failed to start infrastructure!
+    pause
+    goto MAIN_MENU
+)
+echo.
+echo ✅ Infrastructure services started!
+echo.
+echo 🌐 Available Infrastructure:
+echo ─────────────────────────────────────────────────────────
+echo │ 🛡️ Keycloak      │ http://localhost:8080  │ admin/dev123   │
+echo │ 🐰 RabbitMQ      │ http://localhost:15672 │ dev/dev123     │
+echo │ 💾 MinIO         │ http://localhost:9001  │ devadmin/dev123456 │
+echo │ 🦊 GitLab        │ http://localhost:8082  │ root/dev123456 │
+echo │ 🏗️ Jenkins       │ http://localhost:8081  │ admin/admin123 │
+echo │ 📦 Nexus         │ http://localhost:8083  │ admin/admin123 │
+echo ─────────────────────────────────────────────────────────
+echo.
+pause
+goto MAIN_MENU
+
+:APPLICATION_ONLY
+echo.
+echo 🎯 Starting Application Services Only...
+docker-compose -f docker-compose.dev.yml up -d
+if %errorlevel% neq 0 (
+    echo ❌ Failed to start application!
+    pause
+    goto MAIN_MENU
+)
+echo.
+echo ✅ Application services started!
+echo.
+echo 🌐 Available Services:
+echo ─────────────────────────────────────────────────────────
+echo │ 🚀 NestJS App    │ http://localhost:3000  │ -              │
+echo │ 🗄️ PostgreSQL    │ localhost:5435         │ postgres/password │
+echo │ ⚡ Redis         │ localhost:6380         │ -              │
+echo ─────────────────────────────────────────────────────────
+echo.
+pause
+goto MAIN_MENU
+
+:VIEW_STATUS
+echo.
+echo 📊 Current Service Status:
+echo.
+echo Infrastructure Services:
+docker-compose -f docker-compose.infrastructure.dev.yml ps
+echo.
+echo Application Services:
+docker-compose -f docker-compose.dev.yml ps
+echo.
+pause
+goto MAIN_MENU
+
+:VIEW_LOGS
+echo.
+echo 🔍 Available log options:
+echo 1. Infrastructure logs
+echo 2. Application logs
+echo 3. Specific service logs
+echo.
+set /p log_choice="Choose logs to view (1-3): "
+
+if "%log_choice%"=="1" (
+    docker-compose -f docker-compose.infrastructure.dev.yml logs -f
+) else if "%log_choice%"=="2" (
+    docker-compose -f docker-compose.dev.yml logs -f
+) else if "%log_choice%"=="3" (
+    echo Available services: keycloak, rabbitmq, minio, gitlab, jenkins, nexus, nestjs-app, postgres, redis
+    set /p service="Enter service name: "
+    docker logs -f %service%-dev 2>nul || docker logs -f nestjs-lesson1-%service%-dev
+)
+pause
+goto MAIN_MENU
+
+:STOP_ALL
+echo.
+echo 🛑 Stopping all development services...
+docker-compose -f docker-compose.dev.yml down
+docker-compose -f docker-compose.infrastructure.dev.yml down
+echo.
+echo ✅ All services stopped!
+pause
+goto MAIN_MENU
+
+:CLEAN_UP
+echo.
+echo ⚠️  WARNING: This will remove all containers and volumes!
+echo This will delete all data including databases, uploaded files, etc.
+echo.
+set /p confirm="Are you sure? Type 'YES' to confirm: "
+if not "%confirm%"=="YES" goto MAIN_MENU
+
+echo.
+echo 🧹 Cleaning up development environment...
+docker-compose -f docker-compose.dev.yml down -v
+docker-compose -f docker-compose.infrastructure.dev.yml down -v
+docker system prune -f
+echo.
+echo ✅ Cleanup complete!
+pause
+goto MAIN_MENU
+
+:EXIT
+echo.
+echo 👋 Goodbye!
+exit /b 0

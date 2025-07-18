@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # NestJS Application - Development
+  nestjs-app:
+    build:
+      context: ./lesson1
+      dockerfile: ./setup/Dockerfile
+      target: builder
+    container_name: nestjs-lesson1-app-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+      - "9229:9229" # Debug port
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+    env_file:
+      - ./lesson1/.env.development
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - app-network
+      - infrastructure-dev  # Connect to infrastructure network
+    volumes:
+      - ./lesson1/src:/app/src:rw
+      - ./lesson1/package.json:/app/package.json:rw
+      - /app/node_modules
+    command: npm run start:debug
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: nestjs-lesson1-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: nestjs_db
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: nestjs-lesson1-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_dev_data:/data
+    networks:
+      - app-network
+
+volumes:
+  postgres_dev_data:
+  redis_dev_data:
+
+networks:
+  app-network:
+    driver: bridge
+  infrastructure-dev:
+    external: true

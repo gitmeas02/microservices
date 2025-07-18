@@ -1,0 +1,130 @@
+version: '3.8'
+
+services:
+  # NestJS Application - Production optimized
+  nestjs-app:
+    build:
+      context: ./lesson1
+      dockerfile: ./setup/Dockerfile
+      target: production
+    container_name: nestjs-lesson1-app-prod
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    env_file:
+      - ./lesson1/.env.production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+    volumes:
+      - ./logs:/app/logs:rw
+      - /app/node_modules
+    healthcheck:
+      test: ["CMD", "node", "healthcheck.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # PostgreSQL Database - Production ready
+  postgres:
+    image: postgres:15-alpine
+    container_name: nestjs-lesson1-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${DB_NAME:-nestjs_db}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data:rw
+      - ./lesson1/setup/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # Redis for caching - Production ready
+  redis:
+    image: redis:7-alpine
+    container_name: nestjs-lesson1-redis-prod
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-}
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data:rw
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+
+  # Nginx reverse proxy - Production ready
+  nginx:
+    image: nginx:alpine
+    container_name: nestjs-lesson1-nginx-prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./lesson1/setup/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./lesson1/setup/ssl:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx:rw
+    depends_on:
+      nestjs-app:
+        condition: service_healthy
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 64M
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16

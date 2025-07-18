@@ -1,0 +1,334 @@
+version: '3.8'
+
+services:
+  # =============================================================================
+  # KEYCLOAK - Production Configuration
+  # =============================================================================
+  keycloak-db:
+    image: postgres:15-alpine
+    container_name: keycloak-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${KC_DB_NAME:-keycloak}
+      POSTGRES_USER: ${KC_DB_USER:-keycloak}
+      POSTGRES_PASSWORD: ${KC_DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - keycloak_db_prod_data:/var/lib/postgresql/data
+      - ./infrastructure/keycloak/db-backup:/backup
+    networks:
+      - infrastructure-prod
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${KC_DB_USER:-keycloak}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0
+    container_name: keycloak-prod
+    restart: unless-stopped
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/${KC_DB_NAME:-keycloak}
+      KC_DB_USERNAME: ${KC_DB_USER:-keycloak}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      KC_HOSTNAME: ${KC_HOSTNAME}
+      KC_HOSTNAME_STRICT: true
+      KC_HOSTNAME_STRICT_HTTPS: true
+      KC_PROXY: edge
+      KC_LOG_LEVEL: warn
+      KC_METRICS_ENABLED: true
+      KC_HEALTH_ENABLED: true
+      KEYCLOAK_ADMIN: ${KC_ADMIN_USER}
+      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+    ports:
+      - "8080:8080"
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    networks:
+      - infrastructure-prod
+    volumes:
+      - keycloak_prod_data:/opt/keycloak/data
+      - ./infrastructure/keycloak/ssl:/opt/keycloak/ssl
+      - ./infrastructure/keycloak/prod-realm.json:/opt/keycloak/data/import/realm.json
+    command: start --import-realm
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1024M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # =============================================================================
+  # RABBITMQ - Production Configuration
+  # =============================================================================
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: rabbitmq-prod
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_prod_data:/var/lib/rabbitmq
+      - ./infrastructure/rabbitmq/prod.conf:/etc/rabbitmq/rabbitmq.conf
+      - ./infrastructure/rabbitmq/ssl:/etc/rabbitmq/ssl
+    networks:
+      - infrastructure-prod
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # =============================================================================
+  # MINIO - Production Configuration
+  # =============================================================================
+  minio:
+    image: minio/minio:latest
+    container_name: minio-prod
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BROWSER_REDIRECT_URL: https://${MINIO_HOSTNAME}:9001
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_prod_data:/data
+      - ./infrastructure/minio/ssl:/root/.minio/certs
+    networks:
+      - infrastructure-prod
+    command: server /data --console-address ":9001"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1024M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # =============================================================================
+  # GITLAB - Production Configuration
+  # =============================================================================
+  gitlab:
+    image: gitlab/gitlab-ce:16.7.0-ce.0
+    container_name: gitlab-prod
+    restart: unless-stopped
+    hostname: ${GITLAB_HOSTNAME}
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'https://${GITLAB_HOSTNAME}'
+        nginx['listen_port'] = 80
+        nginx['listen_https'] = false
+        nginx['proxy_set_headers'] = {
+          "Host" => "$$http_host_with_default",
+          "X-Real-IP" => "$$remote_addr",
+          "X-Forwarded-For" => "$$proxy_add_x_forwarded_for",
+          "X-Forwarded-Proto" => "https",
+          "X-Forwarded-Ssl" => "on"
+        }
+        gitlab_rails['initial_root_password'] = '${GITLAB_ROOT_PASSWORD}'
+        gitlab_rails['gitlab_shell_ssh_port'] = 2222
+        # Production optimizations
+        postgresql['shared_buffers'] = "256MB"
+        postgresql['max_connections'] = 200
+        sidekiq['max_concurrency'] = 25
+        # Email configuration
+        gitlab_rails['smtp_enable'] = true
+        gitlab_rails['smtp_address'] = "${SMTP_HOST}"
+        gitlab_rails['smtp_port'] = ${SMTP_PORT}
+        gitlab_rails['smtp_user_name'] = "${SMTP_USER}"
+        gitlab_rails['smtp_password'] = "${SMTP_PASSWORD}"
+        gitlab_rails['smtp_domain'] = "${SMTP_DOMAIN}"
+        gitlab_rails['smtp_authentication'] = "login"
+        gitlab_rails['smtp_enable_starttls_auto'] = true
+        gitlab_rails['smtp_tls'] = false
+        gitlab_rails['gitlab_email_from'] = '${GITLAB_EMAIL_FROM}'
+        # Monitoring
+        prometheus_monitoring['enable'] = true
+        grafana['enable'] = true
+    ports:
+      - "8082:80"
+      - "2222:22"
+    volumes:
+      - gitlab_prod_config:/etc/gitlab
+      - gitlab_prod_logs:/var/log/gitlab
+      - gitlab_prod_data:/var/opt/gitlab
+      - ./infrastructure/gitlab/ssl:/etc/gitlab/ssl
+    networks:
+      - infrastructure-prod
+    shm_size: '512m'
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4096M
+        reservations:
+          cpus: '1.0'
+          memory: 2048M
+
+  gitlab-runner:
+    image: gitlab/gitlab-runner:alpine3.18-v16.7.0
+    container_name: gitlab-runner-prod
+    restart: unless-stopped
+    volumes:
+      - gitlab_runner_prod_config:/etc/gitlab-runner
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./infrastructure/gitlab-runner/prod-config.toml:/etc/gitlab-runner/config.toml
+    networks:
+      - infrastructure-prod
+    depends_on:
+      - gitlab
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+
+  # =============================================================================
+  # JENKINS - Production Configuration
+  # =============================================================================
+  jenkins:
+    image: jenkins/jenkins:2.440-lts-jdk17
+    container_name: jenkins-prod
+    restart: unless-stopped
+    environment:
+      JAVA_OPTS: -Djenkins.install.runSetupWizard=false -Xmx2g -Xms1g
+      JENKINS_OPTS: --httpPort=8081
+    ports:
+      - "8081:8081"
+      - "50000:50000"
+    volumes:
+      - jenkins_prod_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./infrastructure/jenkins/prod-plugins.txt:/usr/share/jenkins/ref/plugins.txt
+      - ./infrastructure/jenkins/prod-casc.yaml:/var/jenkins_home/casc_configs/jenkins.yaml
+      - ./infrastructure/jenkins/ssl:/var/jenkins_home/ssl
+    networks:
+      - infrastructure-prod
+    user: root
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 3072M
+        reservations:
+          cpus: '1.0'
+          memory: 1536M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # =============================================================================
+  # NEXUS - Production Configuration
+  # =============================================================================
+  nexus:
+    image: sonatype/nexus3:3.45.0
+    container_name: nexus-prod
+    restart: unless-stopped
+    environment:
+      INSTALL4J_ADD_VM_PARAMS: "-Xms2g -Xmx2g -XX:MaxDirectMemorySize=3g"
+    ports:
+      - "8083:8081"
+      - "8084:8082"  # Docker registry (hosted)
+      - "8085:8083"  # Docker registry (proxy)
+    volumes:
+      - nexus_prod_data:/nexus-data
+      - ./infrastructure/nexus/backup:/nexus-backup
+    networks:
+      - infrastructure-prod
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4096M
+        reservations:
+          cpus: '1.0'
+          memory: 2048M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/service/rest/v1/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # =============================================================================
+  # BACKUP SERVICE
+  # =============================================================================
+  backup:
+    image: alpine:latest
+    container_name: backup-service
+    restart: "no"
+    volumes:
+      - keycloak_db_prod_data:/backup/keycloak-db:ro
+      - gitlab_prod_data:/backup/gitlab:ro
+      - nexus_prod_data:/backup/nexus:ro
+      - minio_prod_data:/backup/minio:ro
+      - rabbitmq_prod_data:/backup/rabbitmq:ro
+      - ./infrastructure/backup:/backup-dest
+    networks:
+      - infrastructure-prod
+    command: /bin/sh -c "sleep infinity"
+
+volumes:
+  keycloak_db_prod_data:
+    driver: local
+  keycloak_prod_data:
+    driver: local
+  rabbitmq_prod_data:
+    driver: local
+  minio_prod_data:
+    driver: local
+  gitlab_prod_config:
+    driver: local
+  gitlab_prod_logs:
+    driver: local
+  gitlab_prod_data:
+    driver: local
+  gitlab_runner_prod_config:
+    driver: local
+  jenkins_prod_home:
+    driver: local
+  nexus_prod_data:
+    driver: local
+
+networks:
+  infrastructure-prod:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.32.0.0/16

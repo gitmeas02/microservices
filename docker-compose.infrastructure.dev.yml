@@ -1,0 +1,285 @@
+# Docker Compose Configuration for Development Infrastructure
+# Compatible with Docker Compose v2.0+
+
+services:
+  # =============================================================================
+  # KEYCLOAK - Development Configuration
+  # =============================================================================
+  keycloak-db:
+    image: postgres:15-alpine
+    container_name: keycloak-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: keycloak_dev
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: dev_password
+    volumes:
+      - keycloak_db_dev_data:/var/lib/postgresql/data
+    networks:
+      - infrastructure-dev
+    ports:
+      - "5433:5432"  # Expose for direct access
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0
+    container_name: keycloak-dev
+    restart: unless-stopped
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak_dev
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: dev_password
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: 8080
+      KC_HOSTNAME_STRICT: false
+      KC_HOSTNAME_STRICT_HTTPS: false
+      KC_LOG_LEVEL: debug
+      KC_METRICS_ENABLED: true
+      KC_HEALTH_ENABLED: true
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: dev123
+    ports:
+      - "8080:8080"
+    depends_on:
+      - keycloak-db
+    networks:
+      - infrastructure-dev
+    volumes:
+      - keycloak_dev_data:/opt/keycloak/data
+      - ./infrastructure/keycloak/dev-realm.json:/opt/keycloak/data/import/dev-realm.json
+    command: start-dev --import-realm
+
+  # =============================================================================
+  # RABBITMQ - Development Configuration
+  # =============================================================================
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: rabbitmq-dev
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: dev
+      RABBITMQ_DEFAULT_PASS: dev123
+      RABBITMQ_DEFAULT_VHOST: dev
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_dev_data:/var/lib/rabbitmq
+      - ./infrastructure/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json
+    networks:
+      - infrastructure-dev
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # =============================================================================
+  # MINIO - Development Configuration
+  # =============================================================================
+  minio:
+    image: minio/minio:latest
+    container_name: minio-dev
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: devadmin
+      MINIO_ROOT_PASSWORD: dev123456
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_dev_data:/data
+      - ./infrastructure/minio/dev-buckets:/buckets
+    networks:
+      - infrastructure-dev
+    command: server /data --console-address ":9001"
+
+  # =============================================================================
+  # GITLAB - Development Configuration (Lightweight)
+  # =============================================================================
+  gitlab:
+    image: gitlab/gitlab-ce:16.6.1-ce.0
+    container_name: gitlab-dev
+    restart: unless-stopped
+    hostname: gitlab-dev.local
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://localhost:8082'
+        gitlab_rails['initial_root_password'] = 'dev123456'
+        gitlab_rails['gitlab_shell_ssh_port'] = 2222
+        nginx['listen_port'] = 80
+        nginx['listen_https'] = false
+        # Lightweight development settings
+        postgresql['shared_buffers'] = "64MB"
+        postgresql['max_connections'] = 50
+        sidekiq['max_concurrency'] = 10
+        gitlab_rails['gitlab_email_enabled'] = false
+        # Disable some heavy features for dev
+        prometheus_monitoring['enable'] = false
+        alertmanager['enable'] = false
+        node_exporter['enable'] = false
+        redis_exporter['enable'] = false
+        postgres_exporter['enable'] = false
+        gitlab_exporter['enable'] = false
+    ports:
+      - "8082:80"
+      - "2222:22"
+    volumes:
+      - gitlab_dev_config:/etc/gitlab
+      - gitlab_dev_logs:/var/log/gitlab
+      - gitlab_dev_data:/var/opt/gitlab
+    networks:
+      - infrastructure-dev
+    shm_size: '256m'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/users/sign_in"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 300s
+
+  gitlab-runner:
+    image: gitlab/gitlab-runner:alpine3.18-v16.6.1
+    container_name: gitlab-runner-dev
+    restart: unless-stopped
+    volumes:
+      - gitlab_runner_dev_config:/etc/gitlab-runner
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - infrastructure-dev
+    depends_on:
+      - gitlab
+
+  # =============================================================================
+  # JENKINS - Development Configuration
+  # =============================================================================
+  jenkins:
+    image: jenkins/jenkins:2.426.1-lts-jdk17
+    container_name: jenkins-dev
+    restart: unless-stopped
+    environment:
+      JAVA_OPTS: -Djenkins.install.runSetupWizard=false
+      JENKINS_OPTS: --httpPort=8081
+    ports:
+      - "8081:8081"
+      - "50000:50000"
+    volumes:
+      - jenkins_dev_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./infrastructure/jenkins/dev-plugins.txt:/usr/share/jenkins/ref/plugins.txt
+      - ./infrastructure/jenkins/dev-casc.yaml:/var/jenkins_home/casc_configs/jenkins.yaml
+    networks:
+      - infrastructure-dev
+    user: root
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  # =============================================================================
+  # NEXUS - Development Configuration
+  # =============================================================================
+  nexus:
+    image: sonatype/nexus3:3.45.0
+    container_name: nexus-dev
+    restart: unless-stopped
+    environment:
+      INSTALL4J_ADD_VM_PARAMS: "-Xms512m -Xmx512m -XX:MaxDirectMemorySize=1g"
+    ports:
+      - "8083:8081"
+      - "8084:8082"
+    volumes:
+      - nexus_dev_data:/nexus-data
+    networks:
+      - infrastructure-dev
+
+  # =============================================================================
+  # PROMETHEUS - Metrics Collection (Development)
+  # =============================================================================
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: prometheus-dev
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus_dev_data:/prometheus
+      - ./infrastructure/prometheus/dev-prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./infrastructure/prometheus/dev-targets.yml:/etc/prometheus/dev-targets.yml
+    networks:
+      - infrastructure-dev
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--log.level=debug'
+      - '--web.enable-admin-api'
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # =============================================================================
+  # GRAFANA - Monitoring Dashboards (Development)
+  # =============================================================================
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: grafana-dev
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_SECURITY_ADMIN_USER: admin
+      GF_INSTALL_PLUGINS: grafana-piechart-panel,grafana-clock-panel,grafana-worldmap-panel
+      GF_USERS_ALLOW_SIGN_UP: true
+      GF_USERS_ALLOW_ORG_CREATE: true
+      GF_AUTH_ANONYMOUS_ENABLED: true
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_LOG_LEVEL: debug
+      GF_METRICS_ENABLED: true
+      GF_FEATURE_TOGGLES_ENABLE: publicDashboards
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_dev_data:/var/lib/grafana
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning
+      - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - infrastructure-dev
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  keycloak_db_dev_data:
+  keycloak_dev_data:
+  rabbitmq_dev_data:
+  minio_dev_data:
+  gitlab_dev_config:
+  gitlab_dev_logs:
+  gitlab_dev_data:
+  gitlab_runner_dev_config:
+  jenkins_dev_home:
+  nexus_dev_data:
+  prometheus_dev_data:
+  grafana_dev_data:
+
+networks:
+  infrastructure-dev:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.31.0.0/16

@@ -1,0 +1,86 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # NestJS Application
+  - job_name: 'nestjs-app'
+    static_configs:
+      - targets: ['nestjs-app:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Keycloak
+  - job_name: 'keycloak'
+    static_configs:
+      - targets: ['keycloak:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 60s
+
+  # RabbitMQ
+  - job_name: 'rabbitmq'
+    static_configs:
+      - targets: ['rabbitmq:15692']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # MinIO
+  - job_name: 'minio'
+    static_configs:
+      - targets: ['minio:9000']
+    metrics_path: '/minio/v2/metrics/cluster'
+    scrape_interval: 30s
+
+  # Jenkins
+  - job_name: 'jenkins'
+    static_configs:
+      - targets: ['jenkins:8081']
+    metrics_path: '/prometheus'
+    scrape_interval: 60s
+
+  # GitLab
+  - job_name: 'gitlab'
+    static_configs:
+      - targets: ['gitlab:80']
+    metrics_path: '/-/metrics'
+    scrape_interval: 60s
+
+  # Nexus
+  - job_name: 'nexus'
+    static_configs:
+      - targets: ['nexus:8081']
+    metrics_path: '/service/metrics/prometheus'
+    scrape_interval: 60s
+
+  # PostgreSQL (main app)
+  - job_name: 'postgres-app'
+    static_configs:
+      - targets: ['postgres:5432']
+    scrape_interval: 30s
+
+  # PostgreSQL (keycloak)
+  - job_name: 'postgres-keycloak'
+    static_configs:
+      - targets: ['keycloak-db:5432']
+    scrape_interval: 30s
+
+  # Redis
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+
+  # Docker Engine
+  - job_name: 'docker'
+    static_configs:
+      - targets: ['host.docker.internal:9323']
+    scrape_interval: 30s

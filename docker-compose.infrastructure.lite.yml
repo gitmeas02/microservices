@@ -1,0 +1,164 @@
+version: '3.8'
+
+services:
+  # =============================================================================
+  # KEYCLOAK - Development Configuration (Lightweight)
+  # =============================================================================
+  keycloak-db:
+    image: postgres:15-alpine
+    container_name: keycloak-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: keycloak_dev
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: dev_password
+    volumes:
+      - keycloak_db_dev_data:/var/lib/postgresql/data
+    networks:
+      - infrastructure-dev
+    ports:
+      - "5433:5432"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:22.0
+    container_name: keycloak-dev
+    restart: unless-stopped
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak_dev
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: dev_password
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: 8080
+      KC_HOSTNAME_STRICT: false
+      KC_HOSTNAME_STRICT_HTTPS: false
+      KC_LOG_LEVEL: info
+      KC_METRICS_ENABLED: true
+      KC_HEALTH_ENABLED: true
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: dev123
+    ports:
+      - "8080:8080"
+    depends_on:
+      - keycloak-db
+    networks:
+      - infrastructure-dev
+    volumes:
+      - keycloak_dev_data:/opt/keycloak/data
+      - ./infrastructure/keycloak/dev-realm.json:/opt/keycloak/data/import/dev-realm.json
+    command: start-dev --import-realm
+
+  # =============================================================================
+  # RABBITMQ - Development Configuration
+  # =============================================================================
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: rabbitmq-dev
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: dev
+      RABBITMQ_DEFAULT_PASS: dev123
+      RABBITMQ_DEFAULT_VHOST: dev
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_dev_data:/var/lib/rabbitmq
+      - ./infrastructure/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json
+    networks:
+      - infrastructure-dev
+
+  # =============================================================================
+  # MINIO - Development Configuration
+  # =============================================================================
+  minio:
+    image: minio/minio:latest
+    container_name: minio-dev
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: devadmin
+      MINIO_ROOT_PASSWORD: dev123456
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_dev_data:/data
+    networks:
+      - infrastructure-dev
+    command: server /data --console-address ":9001"
+
+  # =============================================================================
+  # NEXUS - Development Configuration (Lightweight)
+  # =============================================================================
+  nexus:
+    image: sonatype/nexus3:3.44.0
+    container_name: nexus-dev
+    restart: unless-stopped
+    environment:
+      INSTALL4J_ADD_VM_PARAMS: "-Xms512m -Xmx512m -XX:MaxDirectMemorySize=512m"
+    ports:
+      - "8083:8081"
+      - "8084:8082"
+    volumes:
+      - nexus_dev_data:/nexus-data
+    networks:
+      - infrastructure-dev
+
+  # =============================================================================
+  # PROMETHEUS - Metrics Collection
+  # =============================================================================
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: prometheus-lite
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus_data_lite:/prometheus
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - infrastructure-dev
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+
+  # =============================================================================
+  # GRAFANA - Monitoring Dashboards
+  # =============================================================================
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: grafana-lite
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_INSTALL_PLUGINS: grafana-piechart-panel,grafana-clock-panel
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data_lite:/var/lib/grafana
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning
+      - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - infrastructure-dev
+    depends_on:
+      - prometheus
+
+volumes:
+  keycloak_db_dev_data:
+  keycloak_dev_data:
+  rabbitmq_dev_data:
+  minio_dev_data:
+  nexus_dev_data:
+  prometheus_data_lite:
+  grafana_data_lite:
+
+networks:
+  infrastructure-dev:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.31.0.0/16

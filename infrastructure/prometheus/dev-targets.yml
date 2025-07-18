@@ -1,0 +1,33 @@
+# Development Dynamic Targets
+# This file can be updated without restarting Prometheus
+- targets:
+    - 'keycloak:8080'
+    - 'rabbitmq:15692'
+    - 'minio:9000'
+    - 'nexus:8081'
+    - 'gitlab:80'
+    - 'jenkins:8081'
+  labels:
+    environment: 'development'
+    group: 'infrastructure'
+
+- targets:
+    - 'host.docker.internal:3000'
+  labels:
+    environment: 'development'
+    group: 'application'
+    service: 'nestjs-app'
+
+- targets:
+    - 'host.docker.internal:5435'
+  labels:
+    environment: 'development'
+    group: 'database'
+    service: 'postgresql'
+
+- targets:
+    - 'host.docker.internal:6380'
+  labels:
+    environment: 'development'
+    group: 'cache'
+    service: 'redis'

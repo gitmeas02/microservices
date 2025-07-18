@@ -1,0 +1,262 @@
+jenkins:
+  systemMessage: "Jenkins Production Environment - Handle with Care!"
+  numExecutors: 4
+  mode: NORMAL
+  scmCheckoutRetryCount: 3
+  labelString: "docker nodejs kubernetes production"
+  
+  securityRealm:
+    keycloak:
+      keycloakServerUrl: "${KEYCLOAK_URL}"
+      realm: "${KEYCLOAK_REALM}"
+      clientId: "jenkins"
+      clientSecret: "${KEYCLOAK_CLIENT_SECRET}"
+
+  authorizationStrategy:
+    globalMatrix:
+      permissions:
+        - "Overall/Administer:administrators"
+        - "Overall/Read:authenticated"
+        - "Job/Read:authenticated"
+        - "Job/Build:developers"
+        - "Job/Configure:developers"
+        - "Job/Create:developers"
+        - "Job/Delete:administrators"
+
+  globalNodeProperties:
+    - envVars:
+        env:
+          - key: "ENVIRONMENT"
+            value: "production"
+          - key: "DOCKER_HOST"
+            value: "unix:///var/run/docker.sock"
+          - key: "KUBERNETES_NAMESPACE"
+            value: "nestjs-prod"
+
+  clouds:
+    - docker:
+        name: "docker-cloud-prod"
+        dockerApi:
+          dockerHost:
+            uri: "unix:///var/run/docker.sock"
+        templates:
+          - labelString: "docker-agent-prod"
+            dockerTemplateBase:
+              image: "jenkins/inbound-agent:latest"
+            remoteFs: "/home/jenkins/agent"
+            connector:
+              attach:
+                user: "jenkins"
+            instanceCapStr: "5"
+            retentionStrategy:
+              idleMinutes: 5
+
+    - kubernetes:
+        name: "kubernetes-cloud"
+        serverUrl: "${KUBERNETES_API_SERVER}"
+        credentialsId: "kubernetes-service-account"
+        namespace: "jenkins"
+        jenkinsTunnel: "jenkins-agent:50000"
+        jenkinsUrl: "http://jenkins:8081"
+        maxRequestsPerHost: 32
+        retentionTimeout: 300
+        connectTimeout: 10
+        readTimeout: 20
+        templates:
+          - name: "k8s-agent"
+            label: "kubernetes-agent"
+            namespace: "jenkins"
+            nodeUsageMode: NORMAL
+            containers:
+              - name: "jnlp"
+                image: "jenkins/inbound-agent:latest"
+                workingDir: "/home/jenkins/agent"
+                resourceRequestMemory: "512Mi"
+                resourceLimitMemory: "1Gi"
+                resourceRequestCpu: "200m"
+                resourceLimitCpu: "500m"
+
+jobs:
+  - script: |
+      folder('Production') {
+        displayName('Production Pipelines')
+        description('Production environment pipelines - Handle with care!')
+      }
+
+  - script: |
+      pipelineJob('Production/nestjs-production-pipeline') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('${GITLAB_REPO_URL}')
+                  credentials('gitlab-prod-credentials')
+                }
+                branch('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile.prod')
+          }
+        }
+        triggers {
+          scm('H/15 * * * *')
+        }
+        properties {
+          parameters {
+            stringParam('IMAGE_TAG', 'latest', 'Docker image tag to deploy')
+            choiceParam('ENVIRONMENT', ['staging', 'production'], 'Target environment')
+            booleanParam('RUN_TESTS', true, 'Run tests before deployment')
+            booleanParam('SEND_NOTIFICATIONS', true, 'Send deployment notifications')
+          }
+        }
+      }
+
+  - script: |
+      pipelineJob('Production/database-backup') {
+        definition {
+          cps {
+            script: '''
+              pipeline {
+                agent any
+                triggers {
+                  cron('0 2 * * *') // Daily at 2 AM
+                }
+                stages {
+                  stage('Backup') {
+                    steps {
+                      script {
+                        sh """
+                          docker exec postgres pg_dump -U postgres nestjs_db > backup/db_\$(date +%Y%m%d_%H%M%S).sql
+                          aws s3 cp backup/ s3://nestjs-backups/ --recursive
+                        """
+                      }
+                    }
+                  }
+                }
+              }
+            '''
+          }
+        }
+      }
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - usernamePassword:
+              scope: GLOBAL
+              id: "gitlab-prod-credentials"
+              username: "${GITLAB_USERNAME}"
+              password: "${GITLAB_TOKEN}"
+              description: "GitLab production credentials"
+          
+          - string:
+              scope: GLOBAL
+              id: "docker-registry-token"
+              secret: "${DOCKER_REGISTRY_TOKEN}"
+              description: "Docker registry token"
+          
+          - usernamePassword:
+              scope: GLOBAL
+              id: "nexus-prod-credentials"
+              username: "${NEXUS_USERNAME}"
+              password: "${NEXUS_PASSWORD}"
+              description: "Nexus repository production credentials"
+          
+          - file:
+              scope: GLOBAL
+              id: "kubeconfig-prod"
+              fileName: "kubeconfig"
+              description: "Kubernetes production config"
+          
+          - aws:
+              scope: GLOBAL
+              id: "aws-credentials"
+              accessKey: "${AWS_ACCESS_KEY_ID}"
+              secretKey: "${AWS_SECRET_ACCESS_KEY}"
+              description: "AWS credentials for S3 backups"
+          
+          - string:
+              scope: GLOBAL
+              id: "slack-webhook"
+              secret: "${SLACK_WEBHOOK_URL}"
+              description: "Slack webhook for notifications"
+
+tool:
+  git:
+    installations:
+      - name: "Default Git"
+        home: "/usr/bin/git"
+
+  nodejs:
+    installations:
+      - name: "NodeJS 20"
+        properties:
+          - installSource:
+              installers:
+                - nodeJSInstaller:
+                    id: "20.10.0"
+                    npmPackagesRefreshHours: 72
+
+  dockerTool:
+    installations:
+      - name: "Docker"
+        properties:
+          - installSource:
+              installers:
+                - fromDocker:
+                    version: "latest"
+
+  terraform:
+    installations:
+      - name: "Terraform"
+        properties:
+          - installSource:
+              installers:
+                - terraformInstaller:
+                    id: "1.6.0"
+
+unclassified:
+  location:
+    adminAddress: "${JENKINS_ADMIN_EMAIL}"
+    url: "${JENKINS_URL}"
+
+  gitLabConnectionConfig:
+    connections:
+      - name: "GitLab Production"
+        url: "${GITLAB_URL}"
+        apiTokenId: "gitlab-api-token-prod"
+        ignoreCertificateErrors: false
+
+  sonarGlobalConfiguration:
+    installations:
+      - name: "SonarQube Production"
+        serverUrl: "${SONARQUBE_URL}"
+        credentialsId: "sonar-token-prod"
+
+  prometheus:
+    path: "/prometheus"
+    defaultNamespace: "jenkins_prod"
+
+  slackNotifier:
+    teamDomain: "${SLACK_TEAM_DOMAIN}"
+    token: "${SLACK_BOT_TOKEN}"
+    room: "#deployments"
+
+  mailer:
+    smtpHost: "${SMTP_HOST}"
+    smtpPort: "${SMTP_PORT}"
+    useSsl: true
+    charset: "UTF-8"
+    authentication:
+      username: "${SMTP_USERNAME}"
+      password: "${SMTP_PASSWORD}"
+
+  buildDiscarders:
+    configuredBuildDiscarders:
+      - "logRotator":
+          daysToKeepStr: "30"
+          numToKeepStr: "50"
+          artifactDaysToKeepStr: "7"
+          artifactNumToKeepStr: "10"

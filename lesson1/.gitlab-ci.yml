@@ -1,0 +1,320 @@
+stages:
+  - prepare
+  - test
+  - build
+  - security
+  - deploy
+  - notify
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+  NODE_VERSION: "20"
+  REGISTRY: "nexus:8084"
+  IMAGE_NAME: "nestjs-app"
+
+# Global cache configuration
+cache:
+  key: "$CI_COMMIT_REF_SLUG"
+  paths:
+    - node_modules/
+    - .npm/
+
+# =============================================================================
+# PREPARE STAGE
+# =============================================================================
+prepare:
+  stage: prepare
+  image: node:${NODE_VERSION}-alpine
+  script:
+    - echo "Installing dependencies..."
+    - npm ci --cache .npm --prefer-offline --legacy-peer-deps
+  artifacts:
+    paths:
+      - node_modules/
+    expire_in: 1 hour
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - node_modules/
+      - .npm/
+  only:
+    - branches
+    - merge_requests
+
+# =============================================================================
+# TEST STAGE  
+# =============================================================================
+unit-tests:
+  stage: test
+  image: node:${NODE_VERSION}-alpine
+  dependencies:
+    - prepare
+  script:
+    - echo "Running unit tests..."
+    - npm run test:unit
+    - npm run test:cov
+  coverage: '/All files[^|]*\|[^|]*\s+([\d\.]+)/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/cobertura-coverage.xml
+      junit: junit.xml
+    paths:
+      - coverage/
+    expire_in: 1 week
+  only:
+    - branches
+    - merge_requests
+
+integration-tests:
+  stage: test
+  image: node:${NODE_VERSION}-alpine
+  services:
+    - postgres:15-alpine
+    - redis:7-alpine
+  variables:
+    POSTGRES_DB: test_db
+    POSTGRES_USER: test_user
+    POSTGRES_PASSWORD: test_password
+    DATABASE_URL: postgresql://test_user:test_password@postgres:5432/test_db
+    REDIS_HOST: redis
+    NODE_ENV: test
+  dependencies:
+    - prepare
+  script:
+    - echo "Running integration tests..."
+    - npm run test:e2e
+  artifacts:
+    reports:
+      junit: e2e-junit.xml
+    expire_in: 1 week
+  only:
+    - branches
+    - merge_requests
+
+lint-check:
+  stage: test
+  image: node:${NODE_VERSION}-alpine
+  dependencies:
+    - prepare
+  script:
+    - echo "Running ESLint..."
+    - npm run lint
+    - echo "Running Prettier check..."
+    - npm run format:check
+  only:
+    - branches
+    - merge_requests
+
+type-check:
+  stage: test
+  image: node:${NODE_VERSION}-alpine
+  dependencies:
+    - prepare
+  script:
+    - echo "Running TypeScript type checking..."
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 hour
+  only:
+    - branches
+    - merge_requests
+
+# =============================================================================
+# BUILD STAGE
+# =============================================================================
+build-docker-dev:
+  stage: build
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  variables:
+    IMAGE_TAG: "$CI_COMMIT_SHORT_SHA"
+  before_script:
+    - docker login -u $NEXUS_USER -p $NEXUS_PASSWORD $REGISTRY
+  script:
+    - echo "Building Docker image for development..."
+    - docker build -t $REGISTRY/$IMAGE_NAME:dev-$IMAGE_TAG -f setup/Dockerfile --target builder .
+    - docker push $REGISTRY/$IMAGE_NAME:dev-$IMAGE_TAG
+    - docker tag $REGISTRY/$IMAGE_NAME:dev-$IMAGE_TAG $REGISTRY/$IMAGE_NAME:dev-latest
+    - docker push $REGISTRY/$IMAGE_NAME:dev-latest
+  only:
+    - develop
+    - feature/*
+
+build-docker-prod:
+  stage: build
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  variables:
+    IMAGE_TAG: "$CI_COMMIT_SHORT_SHA"
+  before_script:
+    - docker login -u $NEXUS_USER -p $NEXUS_PASSWORD $REGISTRY
+  script:
+    - echo "Building Docker image for production..."
+    - docker build -t $REGISTRY/$IMAGE_NAME:prod-$IMAGE_TAG -f setup/Dockerfile --target production .
+    - docker push $REGISTRY/$IMAGE_NAME:prod-$IMAGE_TAG
+    - docker tag $REGISTRY/$IMAGE_NAME:prod-$IMAGE_TAG $REGISTRY/$IMAGE_NAME:prod-latest
+    - docker push $REGISTRY/$IMAGE_NAME:prod-latest
+  only:
+    - main
+    - master
+
+# =============================================================================
+# SECURITY STAGE
+# =============================================================================
+dependency-scan:
+  stage: security
+  image: node:${NODE_VERSION}-alpine
+  dependencies:
+    - prepare
+  script:
+    - echo "Running npm audit..."
+    - npm audit --audit-level=moderate
+  allow_failure: true
+  only:
+    - branches
+    - merge_requests
+
+docker-scan:
+  stage: security
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  script:
+    - echo "Scanning Docker image for vulnerabilities..."
+    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock 
+      -v $PWD:/path aquasec/trivy:latest image --exit-code 0 --no-progress 
+      --format table $REGISTRY/$IMAGE_NAME:prod-$CI_COMMIT_SHORT_SHA
+  dependencies:
+    - build-docker-prod
+  allow_failure: true
+  only:
+    - main
+    - master
+
+# =============================================================================
+# DEPLOY STAGE
+# =============================================================================
+deploy-dev:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - echo "Deploying to development environment..."
+    - |
+      curl -X POST \
+        -H "Authorization: Bearer $JENKINS_API_TOKEN" \
+        -H "Content-Type: application/json" \
+        "$JENKINS_URL/job/deploy-dev/buildWithParameters" \
+        -d "IMAGE_TAG=$CI_COMMIT_SHORT_SHA"
+  environment:
+    name: development
+    url: http://dev.nestjs-app.local
+  dependencies:
+    - build-docker-dev
+  only:
+    - develop
+
+deploy-staging:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - echo "Deploying to staging environment..."
+    - |
+      curl -X POST \
+        -H "Authorization: Bearer $JENKINS_API_TOKEN" \
+        -H "Content-Type: application/json" \
+        "$JENKINS_URL/job/deploy-staging/buildWithParameters" \
+        -d "IMAGE_TAG=$CI_COMMIT_SHORT_SHA"
+  environment:
+    name: staging
+    url: http://staging.nestjs-app.local
+  dependencies:
+    - build-docker-prod
+  when: manual
+  only:
+    - main
+    - master
+
+deploy-production:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - echo "Deploying to production environment..."
+    - |
+      curl -X POST \
+        -H "Authorization: Bearer $JENKINS_API_TOKEN" \
+        -H "Content-Type: application/json" \
+        "$JENKINS_URL/job/deploy-production/buildWithParameters" \
+        -d "IMAGE_TAG=$CI_COMMIT_SHORT_SHA"
+  environment:
+    name: production
+    url: https://nestjs-app.com
+  dependencies:
+    - build-docker-prod
+  when: manual
+  only:
+    - main
+    - master
+
+# =============================================================================
+# NOTIFY STAGE
+# =============================================================================
+notify-success:
+  stage: notify
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - echo "Sending success notification..."
+    - |
+      curl -X POST \
+        -H "Content-Type: application/json" \
+        "$RABBITMQ_WEBHOOK_URL" \
+        -d '{
+          "event": "pipeline_success",
+          "project": "'$CI_PROJECT_NAME'",
+          "branch": "'$CI_COMMIT_REF_NAME'",
+          "commit": "'$CI_COMMIT_SHORT_SHA'",
+          "pipeline_id": "'$CI_PIPELINE_ID'"
+        }'
+  when: on_success
+  only:
+    - main
+    - master
+    - develop
+
+notify-failure:
+  stage: notify
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - echo "Sending failure notification..."
+    - |
+      curl -X POST \
+        -H "Content-Type: application/json" \
+        "$RABBITMQ_WEBHOOK_URL" \
+        -d '{
+          "event": "pipeline_failure",
+          "project": "'$CI_PROJECT_NAME'",
+          "branch": "'$CI_COMMIT_REF_NAME'",
+          "commit": "'$CI_COMMIT_SHORT_SHA'",
+          "pipeline_id": "'$CI_PIPELINE_ID'"
+        }'
+  when: on_failure
+  only:
+    - main
+    - master
+    - develop

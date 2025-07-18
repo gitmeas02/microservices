@@ -1,0 +1,24 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus-Dev
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    version: 1
+    editable: true
+    jsonData:
+      timeInterval: "5s"
+      queryTimeout: "60s"
+      httpMethod: "POST"
+    basicAuth: false
+    withCredentials: false
+    secureJsonFields: {}
+    
+  - name: TestData-Dev
+    type: testdata
+    access: proxy
+    isDefault: false
+    version: 1
+    editable: true

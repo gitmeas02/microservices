@@ -1,0 +1,169 @@
+{
+  "realm": "nestjs-dev",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 30,
+  "defaultSignatureAlgorithm": "RS256",
+  "revokeRefreshToken": false,
+  "refreshTokenMaxReuse": 0,
+  "accessTokenLifespan": 300,
+  "accessTokenLifespanForImplicitFlow": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "ssoSessionIdleTimeoutRememberMe": 0,
+  "ssoSessionMaxLifespanRememberMe": 0,
+  "offlineSessionIdleTimeout": 2592000,
+  "offlineSessionMaxLifespanEnabled": false,
+  "offlineSessionMaxLifespan": 5184000,
+  "clientSessionIdleTimeout": 0,
+  "clientSessionMaxLifespan": 0,
+  "clientOfflineSessionIdleTimeout": 0,
+  "clientOfflineSessionMaxLifespan": 0,
+  "accessCodeLifespan": 60,
+  "accessCodeLifespanUserAction": 300,
+  "accessCodeLifespanLogin": 1800,
+  "actionTokenGeneratedByAdminLifespan": 43200,
+  "actionTokenGeneratedByUserLifespan": 300,
+  "oauth2DeviceCodeLifespan": 600,
+  "oauth2DevicePollingInterval": 5,
+  "clients": [
+    {
+      "clientId": "nestjs-app",
+      "name": "NestJS Application",
+      "description": "Main NestJS application client",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "nestjs-dev-secret",
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://localhost:3000/auth/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:3000"
+      ],
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "fullScopeAllowed": true,
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ]
+    },
+    {
+      "clientId": "vue-frontend",
+      "name": "Vue.js Frontend",
+      "description": "Vue.js frontend application",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "vue-dev-secret",
+      "redirectUris": [
+        "http://localhost:5173/*",
+        "http://localhost:5173/auth/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:5173"
+      ],
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "fullScopeAllowed": true
+    }
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "Administrator role"
+      },
+      {
+        "name": "user",
+        "description": "Regular user role"
+      },
+      {
+        "name": "developer",
+        "description": "Developer role"
+      }
+    ]
+  },
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "email": "admin@example.com",
+      "firstName": "Admin",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["admin", "user"]
+    },
+    {
+      "username": "developer",
+      "enabled": true,
+      "email": "dev@example.com",
+      "firstName": "Developer",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "dev123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["developer", "user"]
+    },
+    {
+      "username": "testuser",
+      "enabled": true,
+      "email": "test@example.com",
+      "firstName": "Test",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["user"]
+    }
+  ]
+}

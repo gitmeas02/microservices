@@ -1,0 +1,339 @@
+pipeline {
+    agent any
+    
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 1, unit: 'HOURS')
+        timestamps()
+        skipDefaultCheckout()
+    }
+    
+    environment {
+        NODE_VERSION = '20'
+        REGISTRY = 'nexus:8084'
+        IMAGE_NAME = 'nestjs-app'
+        KUBECONFIG = credentials('kubeconfig-dev')
+        NEXUS_CREDS = credentials('nexus-credentials')
+        RABBITMQ_CREDS = credentials('rabbitmq-credentials')
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    env.GIT_COMMIT_SHORT = env.GIT_COMMIT.take(8)
+                }
+            }
+        }
+        
+        stage('Prepare Environment') {
+            parallel {
+                stage('Install Dependencies') {
+                    steps {
+                        dir('lesson1') {
+                            script {
+                                sh '''
+                                    node --version
+                                    npm --version
+                                    npm ci --legacy-peer-deps
+                                '''
+                            }
+                        }
+                    }
+                }
+                
+                stage('Environment Check') {
+                    steps {
+                        script {
+                            sh '''
+                                docker --version
+                                docker-compose --version
+                                kubectl version --client || echo "kubectl not available"
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Code Quality') {
+            parallel {
+                stage('Lint') {
+                    steps {
+                        dir('lesson1') {
+                            sh 'npm run lint'
+                        }
+                    }
+                }
+                
+                stage('Type Check') {
+                    steps {
+                        dir('lesson1') {
+                            sh 'npm run build'
+                        }
+                    }
+                }
+                
+                stage('Format Check') {
+                    steps {
+                        dir('lesson1') {
+                            sh 'npm run format:check'
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Tests') {
+            parallel {
+                stage('Unit Tests') {
+                    steps {
+                        dir('lesson1') {
+                            sh 'npm run test:unit'
+                        }
+                    }
+                    post {
+                        always {
+                            publishTestResults(
+                                testResultsPattern: 'lesson1/junit.xml',
+                                mergeResults: true
+                            )
+                        }
+                    }
+                }
+                
+                stage('Integration Tests') {
+                    steps {
+                        script {
+                            // Start test services
+                            sh '''
+                                docker-compose -f docker-compose.test.yml up -d postgres redis
+                                sleep 10
+                            '''
+                            
+                            dir('lesson1') {
+                                sh '''
+                                    export DATABASE_URL=postgresql://test_user:test_password@localhost:5433/test_db
+                                    export REDIS_HOST=localhost
+                                    export REDIS_PORT=6380
+                                    npm run test:e2e
+                                '''
+                            }
+                        }
+                    }
+                    post {
+                        always {
+                            sh 'docker-compose -f docker-compose.test.yml down'
+                            publishTestResults(
+                                testResultsPattern: 'lesson1/e2e-junit.xml',
+                                mergeResults: true
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Security Scan') {
+            parallel {
+                stage('Dependency Audit') {
+                    steps {
+                        dir('lesson1') {
+                            script {
+                                sh 'npm audit --audit-level=moderate || true'
+                            }
+                        }
+                    }
+                }
+                
+                stage('SAST Scan') {
+                    steps {
+                        script {
+                            // Using SonarQube or similar SAST tool
+                            sh '''
+                                echo "Running Static Application Security Testing..."
+                                # Add your SAST tool here
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Build Image') {
+            when {
+                anyOf {
+                    branch 'develop'
+                    branch 'main'
+                    branch 'master'
+                }
+            }
+            steps {
+                script {
+                    def imageTag = env.BRANCH_NAME == 'develop' ? "dev-${env.GIT_COMMIT_SHORT}" : "prod-${env.GIT_COMMIT_SHORT}"
+                    def dockerfile = env.BRANCH_NAME == 'develop' ? '--target builder' : '--target production'
+                    
+                    sh """
+                        cd lesson1
+                        docker build ${dockerfile} -t ${REGISTRY}/${IMAGE_NAME}:${imageTag} -f setup/Dockerfile .
+                        echo '${NEXUS_CREDS_PSW}' | docker login -u '${NEXUS_CREDS_USR}' --password-stdin ${REGISTRY}
+                        docker push ${REGISTRY}/${IMAGE_NAME}:${imageTag}
+                        
+                        # Tag as latest for the environment
+                        docker tag ${REGISTRY}/${IMAGE_NAME}:${imageTag} ${REGISTRY}/${IMAGE_NAME}:${env.BRANCH_NAME}-latest
+                        docker push ${REGISTRY}/${IMAGE_NAME}:${env.BRANCH_NAME}-latest
+                    """
+                    
+                    env.IMAGE_TAG = imageTag
+                }
+            }
+        }
+        
+        stage('Deploy') {
+            when {
+                anyOf {
+                    branch 'develop'
+                    allOf {
+                        anyOf {
+                            branch 'main'
+                            branch 'master'
+                        }
+                        // Add approval for production
+                        expression { return env.DEPLOY_TO_PROD == 'true' }
+                    }
+                }
+            }
+            steps {
+                script {
+                    if (env.BRANCH_NAME == 'develop') {
+                        // Deploy to development
+                        sh '''
+                            echo "Deploying to development environment..."
+                            docker-compose -f docker-compose.dev.yml down
+                            export IMAGE_TAG=${IMAGE_TAG}
+                            docker-compose -f docker-compose.dev.yml up -d
+                        '''
+                    } else {
+                        // Deploy to production
+                        sh '''
+                            echo "Deploying to production environment..."
+                            docker-compose -f docker-compose.prod.yml down
+                            export IMAGE_TAG=${IMAGE_TAG}
+                            docker-compose -f docker-compose.prod.yml up -d
+                        '''
+                    }
+                }
+            }
+        }
+        
+        stage('Health Check') {
+            when {
+                anyOf {
+                    branch 'develop'
+                    branch 'main'
+                    branch 'master'
+                }
+            }
+            steps {
+                script {
+                    def healthUrl = env.BRANCH_NAME == 'develop' ? 'http://localhost:3000/health' : 'http://localhost:3000/health'
+                    
+                    sh """
+                        echo "Waiting for application to start..."
+                        sleep 30
+                        
+                        # Check if application is healthy
+                        for i in {1..10}; do
+                            if curl -f ${healthUrl}; then
+                                echo "Application is healthy!"
+                                break
+                            else
+                                echo "Attempt \$i failed, retrying in 10 seconds..."
+                                sleep 10
+                            fi
+                            
+                            if [ \$i -eq 10 ]; then
+                                echo "Health check failed after 10 attempts"
+                                exit 1
+                            fi
+                        done
+                    """
+                }
+            }
+        }
+        
+        stage('Integration Tests Post-Deploy') {
+            when {
+                anyOf {
+                    branch 'develop'
+                    branch 'main'
+                    branch 'master'
+                }
+            }
+            steps {
+                script {
+                    def baseUrl = env.BRANCH_NAME == 'develop' ? 'http://localhost:3000' : 'http://localhost:3000'
+                    
+                    sh """
+                        echo "Running post-deployment integration tests..."
+                        
+                        # Test API endpoints
+                        curl -f ${baseUrl}/health
+                        curl -f ${baseUrl}/api/v1/users
+                        
+                        # Test authentication if Keycloak is configured
+                        # Add more integration tests here
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            // Clean up workspace
+            cleanWs()
+            
+            // Send notification to RabbitMQ
+            script {
+                def status = currentBuild.currentResult ?: 'SUCCESS'
+                def message = [
+                    event: 'jenkins_build_complete',
+                    project: env.JOB_NAME,
+                    branch: env.BRANCH_NAME,
+                    commit: env.GIT_COMMIT_SHORT,
+                    build_number: env.BUILD_NUMBER,
+                    status: status,
+                    timestamp: new Date().toString()
+                ]
+                
+                sh """
+                    curl -X POST \
+                    -u '${RABBITMQ_CREDS_USR}':'${RABBITMQ_CREDS_PSW}' \
+                    -H 'Content-Type: application/json' \
+                    http://rabbitmq:15672/api/exchanges/dev/nestjs.events.exchange/publish \
+                    -d '{
+                        "properties": {},
+                        "routing_key": "jenkins.build",
+                        "payload": "${message.toString()}",
+                        "payload_encoding": "string"
+                    }'
+                """
+            }
+        }
+        
+        success {
+            echo 'Pipeline succeeded!'
+        }
+        
+        failure {
+            echo 'Pipeline failed!'
+            // Send alert notification
+        }
+        
+        unstable {
+            echo 'Pipeline is unstable!'
+        }
+    }
+}

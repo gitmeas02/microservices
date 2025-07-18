@@ -1,0 +1,152 @@
+jenkins:
+  systemMessage: "Jenkins Development Environment"
+  numExecutors: 2
+  mode: NORMAL
+  scmCheckoutRetryCount: 3
+  labelString: "docker nodejs"
+  
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "admin123"
+          name: "Jenkins Admin"
+          emailAddress: "admin@example.com"
+        - id: "developer"
+          password: "dev123"
+          name: "Developer User"
+          emailAddress: "dev@example.com"
+
+  authorizationStrategy:
+    globalMatrix:
+      permissions:
+        - "Overall/Administer:admin"
+        - "Overall/Read:authenticated"
+        - "Job/Read:authenticated"
+        - "Job/Build:authenticated"
+        - "Job/Configure:developer"
+        - "Job/Create:developer"
+
+  globalNodeProperties:
+    - envVars:
+        env:
+          - key: "ENVIRONMENT"
+            value: "development"
+          - key: "DOCKER_HOST"
+            value: "unix:///var/run/docker.sock"
+
+  clouds:
+    - docker:
+        name: "docker-cloud"
+        dockerApi:
+          dockerHost:
+            uri: "unix:///var/run/docker.sock"
+        templates:
+          - labelString: "docker-agent"
+            dockerTemplateBase:
+              image: "jenkins/inbound-agent:latest"
+            remoteFs: "/home/jenkins/agent"
+            connector:
+              attach:
+                user: "jenkins"
+            instanceCapStr: "10"
+            retentionStrategy:
+              idleMinutes: 1
+
+jobs:
+  - script: |
+      pipelineJob('nestjs-development-pipeline') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('http://gitlab-dev.local:8082/root/nestjs-app.git')
+                  credentials('gitlab-credentials')
+                }
+                branch('*/develop')
+              }
+            }
+            scriptPath('Jenkinsfile.dev')
+          }
+        }
+        triggers {
+          scm('H/5 * * * *')
+        }
+      }
+
+  - script: |
+      folder('Development') {
+        displayName('Development Pipelines')
+        description('Development environment pipelines')
+      }
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - usernamePassword:
+              scope: GLOBAL
+              id: "gitlab-credentials"
+              username: "root"
+              password: "dev123456"
+              description: "GitLab root credentials"
+          - string:
+              scope: GLOBAL
+              id: "docker-registry-token"
+              secret: "dev-token-123"
+              description: "Docker registry token"
+          - usernamePassword:
+              scope: GLOBAL
+              id: "nexus-credentials"
+              username: "admin"
+              password: "admin123"
+              description: "Nexus repository credentials"
+
+tool:
+  git:
+    installations:
+      - name: "Default Git"
+        home: "/usr/bin/git"
+
+  nodejs:
+    installations:
+      - name: "NodeJS 20"
+        properties:
+          - installSource:
+              installers:
+                - nodeJSInstaller:
+                    id: "20.10.0"
+                    npmPackagesRefreshHours: 72
+
+  dockerTool:
+    installations:
+      - name: "Docker"
+        properties:
+          - installSource:
+              installers:
+                - fromDocker:
+                    version: "latest"
+
+unclassified:
+  location:
+    adminAddress: "admin@example.com"
+    url: "http://localhost:8081/"
+
+  gitLabConnectionConfig:
+    connections:
+      - name: "GitLab Development"
+        url: "http://gitlab-dev.local:8082"
+        apiTokenId: "gitlab-api-token"
+        ignoreCertificateErrors: true
+
+  sonarGlobalConfiguration:
+    installations:
+      - name: "SonarQube Dev"
+        serverUrl: "http://sonarqube-dev:9000"
+        credentialsId: "sonar-token"
+
+  prometheus:
+    path: "/prometheus"
+    defaultNamespace: "jenkins_dev"
