@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevOps Infrastructure Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 3rem;
+        }
+        
+        .header h1 {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+        
+        .service-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border-left: 4px solid #667eea;
+        }
+        
+        .service-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+        }
+        
+        .service-card h3 {
+            color: #667eea;
+            margin-bottom: 0.5rem;
+            font-size: 1.3rem;
+        }
+        
+        .service-card p {
+            color: #666;
+            margin-bottom: 1rem;
+            line-height: 1.6;
+        }
+        
+        .service-links {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        
+        .service-link {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            transition: background 0.3s ease;
+        }
+        
+        .service-link:hover {
+            background: #5a6fd8;
+        }
+        
+        .service-link.secondary {
+            background: #6c757d;
+        }
+        
+        .service-link.secondary:hover {
+            background: #5a6268;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #28a745;
+            margin-right: 0.5rem;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .footer {
+            text-align: center;
+            color: white;
+            opacity: 0.8;
+            margin-top: 2rem;
+        }
+        
+        .environment-badge {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            margin-left: 0.5rem;
+        }
+        
+        .resource-info {
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 2rem;
+            color: white;
+        }
+        
+        .resource-info h3 {
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 DevOps Infrastructure</h1>
+            <p>Complete Development & CI/CD Environment</p>
+            <span class="environment-badge">DEVELOPMENT</span>
+        </div>
+
+        <div class="resource-info">
+            <h3>📊 Resource Status</h3>
+            <p>All services are running behind Nginx reverse proxy. Health monitoring available via Grafana dashboards.</p>
+        </div>
+
+        <div class="services-grid">
+            <!-- Authentication -->
+            <div class="service-card">
+                <h3><span class="status-indicator"></span>🔐 Keycloak Auth</h3>
+                <p>Identity and Access Management system for authentication and authorization.</p>
+                <div class="service-links">
+                    <a href="http://auth.local" class="service-link">Admin Console</a>
+                    <a href="http://localhost:8080" class="service-link secondary">Direct</a>
+                </div>
+            </div>
+
+            <!-- Source Control -->
+            <div class="service-card">
+                <h3><span class="status-indicator"></span>🔧 GitLab</h3>
+                <p>Complete DevOps platform with Git repositories, CI/CD pipelines, and project management.</p>
+                <div class="service-links">
+                    <a href="http://git.local" class="service-link">GitLab UI</a>
+                    <a href="http://localhost:8082" class="service-link secondary">Direct</a>
+                </div>
+            </div>
+
+            <!-- CI/CD -->
+            <div class="service-card">
+                <h3><span class="status-indicator"></span>⚙️ Jenkins</h3>
+                <p>Automation server for continuous integration and deployment pipelines.</p>
+                <div class="service-links">
+                    <a href="http://ci.local" class="service-link">Dashboard</a>
+                    <a href="http://localhost:8081" class="service-link secondary">Direct</a>
+                </div>
+            </div>
+
+            <!-- Artifact Repository -->
+            <div class="service-card">
+                <h3><span class="status-indicator"></span>📦 Nexus Repository</h3>
+                <p>Universal artifact repository manager supporting multiple package formats.</p>
+                <div class="service-links">
+                    <a href="http://nexus.local" class="service-link">Repository</a>
+                    <a href="http://localhost:8083" class="service-link secondary">Direct</a>
+                </div>
+            </div>
+
+            <!-- Object Storage -->
+            <div class="service-card">
+                <h3><span class="status-indicator"></span>🗄️ MinIO Storage</h3>
+                <p>High-performance object storage compatible with Amazon S3 API.</p>
+                <div class="service-links">
+                    <a href="http://storage.local" class="service-link">Console</a>
+                    <a href="http://localhost:9001" class="service-link secondary">Direct</a>
+                </div>
+            </div>
+
+            <!-- Message Queue -->
+            <div class="service-card">
+                <h3><span class="status-indicator"></span>🐰 RabbitMQ</h3>
+                <p>Message broker for asynchronous communication between services.</p>
+                <div class="service-links">
+                    <a href="http://rabbit.local" class="service-link">Management</a>
+                    <a href="http://localhost:15672" class="service-link secondary">Direct</a>
+                </div>
+            </div>
+
+            <!-- Monitoring -->
+            <div class="service-card">
+                <h3><span class="status-indicator"></span>📈 Prometheus</h3>
+                <p>Monitoring system with dimensional data model and powerful query language.</p>
+                <div class="service-links">
+                    <a href="http://prometheus.local" class="service-link">Metrics</a>
+                    <a href="http://localhost:9090" class="service-link secondary">Direct</a>
+                </div>
+            </div>
+
+            <!-- Dashboards -->
+            <div class="service-card">
+                <h3><span class="status-indicator"></span>📊 Grafana</h3>
+                <p>Analytics and interactive visualization platform for monitoring dashboards.</p>
+                <div class="service-links">
+                    <a href="http://grafana.local" class="service-link">Dashboards</a>
+                    <a href="http://localhost:3001" class="service-link secondary">Direct</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>💡 Add entries to your hosts file for domain routing: <strong>127.0.0.1 auth.local git.local ci.local</strong></p>
+            <p>🔧 Nginx Reverse Proxy running on ports 80 (HTTP) and 443 (HTTPS)</p>
+            <p>📝 Environment: Development | Resource monitoring: <a href="resource-monitor.bat" style="color: #fff;">resource-monitor.bat</a></p>
+        </div>
+    </div>
+
+    <script>
+        // Simple health check for status indicators
+        document.addEventListener('DOMContentLoaded', function() {
+            const indicators = document.querySelectorAll('.status-indicator');
+            
+            // Simulate health checks (in real implementation, these would be actual API calls)
+            indicators.forEach(indicator => {
+                // Randomly simulate some services being down for demo
+                if (Math.random() > 0.9) {
+                    indicator.style.background = '#dc3545';
+                    indicator.style.animation = 'none';
+                }
+            });
+
+            // Add click handlers for service links
+            document.querySelectorAll('.service-link').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    const url = this.href;
+                    if (url.includes('.local')) {
+                        e.preventDefault();
+                        alert('Add to hosts file: 127.0.0.1 ' + new URL(url).hostname);
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
