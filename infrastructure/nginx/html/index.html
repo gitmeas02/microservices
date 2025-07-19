@@ -251,19 +251,14 @@
         </div>
     </div>
 
+    <!-- Include health checker script -->
+    <script src="health-checker.js"></script>
     <script>
-        // Simple health check for status indicators
+        // Initialize real health checking when page loads
         document.addEventListener('DOMContentLoaded', function() {
-            const indicators = document.querySelectorAll('.status-indicator');
-            
-            // Simulate health checks (in real implementation, these would be actual API calls)
-            indicators.forEach(indicator => {
-                // Randomly simulate some services being down for demo
-                if (Math.random() > 0.9) {
-                    indicator.style.background = '#dc3545';
-                    indicator.style.animation = 'none';
-                }
-            });
+            // Initialize the health checker
+            const healthChecker = new ServiceHealthChecker();
+            healthChecker.init();
 
             // Add click handlers for service links
             document.querySelectorAll('.service-link').forEach(link => {
@@ -271,10 +266,54 @@
                     const url = this.href;
                     if (url.includes('.local')) {
                         e.preventDefault();
-                        alert('Add to hosts file: 127.0.0.1 ' + new URL(url).hostname);
+                        const hostname = new URL(url).hostname;
+                        const message = `To use domain links, add this to your hosts file:\n\n127.0.0.1 ${hostname}\n\nThen refresh this page.`;
+                        alert(message);
                     }
                 });
             });
+
+            // Add manual refresh button functionality
+            const refreshButton = document.createElement('button');
+            refreshButton.textContent = '🔄 Refresh Status';
+            refreshButton.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: rgba(255,255,255,0.2);
+                color: white;
+                border: 1px solid rgba(255,255,255,0.3);
+                padding: 10px 15px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 14px;
+                backdrop-filter: blur(10px);
+                transition: all 0.3s ease;
+            `;
+            
+            refreshButton.onmouseover = () => {
+                refreshButton.style.background = 'rgba(255,255,255,0.3)';
+            };
+            
+            refreshButton.onmouseout = () => {
+                refreshButton.style.background = 'rgba(255,255,255,0.2)';
+            };
+            
+            refreshButton.onclick = () => {
+                refreshButton.textContent = '🔄 Checking...';
+                refreshButton.disabled = true;
+                healthChecker.startHealthChecks().then(() => {
+                    refreshButton.textContent = '🔄 Refresh Status';
+                    refreshButton.disabled = false;
+                });
+            };
+            
+            document.body.appendChild(refreshButton);
+
+            // Show Docker status in console
+            console.log('🐳 Docker Service Health Monitor Active');
+            console.log('📊 Health checks run every 10 seconds');
+            console.log('🔍 Click the refresh button to check status manually');
         });
     </script>
 </body>
