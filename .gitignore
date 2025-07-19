@@ -1,0 +1,198 @@
+# DevOps Infrastructure .gitignore
+
+# =============================================================================
+# Docker & Container Files
+# =============================================================================
+# Docker volumes and runtime data (these are generated when containers run)
+
+# =============================================================================
+# SSL Certificates & Security Files
+# =============================================================================
+# SSL certificates (regenerate for each environment)
+infrastructure/nginx/ssl/*.pem
+infrastructure/nginx/ssl/*.key
+infrastructure/nginx/ssl/*.crt
+infrastructure/nginx/ssl/*.csr
+infrastructure/nginx/ssl/openssl.conf
+
+# =============================================================================
+# Logs & Runtime Files
+# =============================================================================
+# Application and service logs (generated at runtime)
+infrastructure/nginx/logs/*.log
+infrastructure/*/logs/
+logs/
+*.log
+
+# =============================================================================
+# Environment & Secret Files
+# =============================================================================
+# Environment files containing secrets
+.env
+.env.local
+.env.development
+.env.production
+.env.staging
+*.env
+
+# But keep template files
+!.env.example
+!.env.copy.*
+
+# =============================================================================
+# Build & Compiled Files
+# =============================================================================
+# Compiled application files (can be regenerated)
+lesson1/dist/
+lesson1/build/
+**/dist/
+**/build/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# =============================================================================
+# Dependencies
+# =============================================================================
+# Node.js dependencies (install with npm/yarn)
+node_modules/
+**/node_modules/
+
+# Lock files (keep one, comment out others based on your preference)
+# package-lock.json  # Uncomment if using yarn
+# yarn.lock          # Uncomment if using npm
+
+# =============================================================================
+# IDE & Editor Files
+# =============================================================================
+# VS Code
+.vscode/
+*.code-workspace
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# =============================================================================
+# OS Files
+# =============================================================================
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# =============================================================================
+# Temporary & Cache Files
+# =============================================================================
+# General temporary files
+temp/
+tmp/
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# =============================================================================
+# Docker Specific
+# =============================================================================
+# Docker compose override files (often contain local-specific settings)
+docker-compose.override.yml
+docker-compose.local.yml
+
+# =============================================================================
+# Database Files
+# =============================================================================
+# Local database files (use Docker volumes instead)
+*.db
+*.sqlite
+*.sqlite3
+
+# =============================================================================
+# DevOps Infrastructure Specific
+# =============================================================================
+# Generated configuration files
+infrastructure/minio/dev-buckets/*
+infrastructure/jenkins/dev-*.xml
+infrastructure/grafana/data/
+
+# Backup files
+*.backup
+*.bak
+
+# =============================================================================
+# Keep These Important Files
+# =============================================================================
+# Explicitly keep important configuration files
+!infrastructure/grafana/provisioning/**/*.yml
+!infrastructure/grafana/provisioning/**/*.yaml
+!infrastructure/grafana/dashboards/*.json
+!infrastructure/prometheus/*.yml
+!infrastructure/jenkins/*.yaml
+!infrastructure/jenkins/*.txt
+!infrastructure/keycloak/*.json
+!infrastructure/rabbitmq/*.json
+!infrastructure/rabbitmq/*.conf
+!infrastructure/nginx/*.conf
+!infrastructure/nginx/conf.d/*.conf
+!infrastructure/nginx/html/*.html
+!infrastructure/nginx/*.bat
+
+# Keep all Docker Compose files
+!docker-compose*.yml
+
+# Keep all documentation
+!*.md
+!**/*.md
+
+# Keep all scripts
+!*.bat
+!*.sh
+!Makefile
+!Jenkinsfile*
+
+# Keep package files
+!package.json
+!package-lock.json
+!yarn.lock
+
+# Keep TypeScript config
+!tsconfig*.json
+!eslint.config.*
+!nest-cli.json
+!.prettierrc
