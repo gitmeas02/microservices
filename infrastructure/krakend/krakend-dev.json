@@ -1,0 +1,361 @@
+{
+  "$schema": "https://www.krakend.io/schema/v3.json",
+  "version": 3,
+  "name": "DevOps Infrastructure API Gateway - Development",
+  "timeout": "5000ms",
+  "cache_ttl": "60s",
+  "output_encoding": "json",
+  "port": 8000,
+  "host": ["http://localhost:8000"],
+  "debug_endpoint": true,
+  "echo_endpoint": true,
+  "extra_config": {
+    "telemetry/metrics": {
+      "collection_time": "30s",
+      "proxy_disabled": false,
+      "router_disabled": false,
+      "backend_disabled": false,
+      "endpoint_disabled": false,
+      "listen_address": ":8090"
+    },
+    "telemetry/logging": {
+      "level": "DEBUG",
+      "prefix": "[KRAKEND-DEV]",
+      "syslog": false,
+      "stdout": true,
+      "format": "default"
+    },
+    "security/cors": {
+      "allow_origins": ["*"],
+      "allow_methods": ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      "allow_headers": ["Accept-Language", "Authorization", "Content-Type", "X-Requested-With", "X-API-Key", "X-Dev-Token"],
+      "expose_headers": ["Content-Length", "X-Request-Id", "X-Dev-Mode"],
+      "max_age": "12h",
+      "allow_credentials": true,
+      "debug": true
+    },
+    "router": {
+      "return_error_msg": true
+    }
+  },
+  "endpoints": [
+    {
+      "endpoint": "/health",
+      "method": "GET",
+      "output_encoding": "json",
+      "backend": [
+        {
+          "url_pattern": "/__health",
+          "encoding": "json",
+          "method": "GET",
+          "host": ["http://localhost:8000"],
+          "disable_host_sanitize": false
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/v1/health",
+      "method": "GET",
+      "output_encoding": "json",
+      "extra_config": {
+        "qos/ratelimit/router": {
+          "max_rate": 1000,
+          "client_max_rate": 100,
+          "strategy": "ip"
+        }
+      },
+      "backend": [
+        {
+          "url_pattern": "/health",
+          "encoding": "json",
+          "method": "GET",
+          "host": ["http://nestjs-app:3000"],
+          "disable_host_sanitize": false,
+          "extra_config": {
+            "backend/http": {
+              "return_error_details": "backend_alias"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/v1/dev/status",
+      "method": "GET",
+      "output_encoding": "json",
+      "backend": [
+        {
+          "url_pattern": "/__debug/config",
+          "encoding": "json",
+          "method": "GET",
+          "host": ["http://localhost:8000"],
+          "disable_host_sanitize": false
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/v1/auth/realms/{realm}/protocol/openid_connect/{path}",
+      "method": "GET",
+      "output_encoding": "json",
+      "extra_config": {
+        "qos/ratelimit/router": {
+          "max_rate": 500,
+          "client_max_rate": 50,
+          "strategy": "ip"
+        }
+      },
+      "backend": [
+        {
+          "url_pattern": "/realms/{realm}/protocol/openid_connect/{path}",
+          "encoding": "json",
+          "method": "GET",
+          "host": ["http://keycloak:8080"],
+          "disable_host_sanitize": false,
+          "extra_config": {
+            "backend/http": {
+              "return_error_details": "keycloak"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/v1/auth/realms/{realm}/protocol/openid_connect/token",
+      "method": "POST",
+      "output_encoding": "json",
+      "extra_config": {
+        "qos/ratelimit/router": {
+          "max_rate": 100,
+          "client_max_rate": 10,
+          "strategy": "ip"
+        }
+      },
+      "backend": [
+        {
+          "url_pattern": "/realms/{realm}/protocol/openid_connect/token",
+          "encoding": "json",
+          "method": "POST",
+          "host": ["http://keycloak:8080"],
+          "disable_host_sanitize": false
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/v1/monitoring/metrics/query",
+      "method": "GET",
+      "output_encoding": "string",
+      "extra_config": {
+        "qos/ratelimit/router": {
+          "max_rate": 1000,
+          "client_max_rate": 100,
+          "strategy": "ip"
+        }
+      },
+      "backend": [
+        {
+          "url_pattern": "/api/v1/query",
+          "encoding": "string",
+          "method": "GET",
+          "host": ["http://prometheus:9090"],
+          "disable_host_sanitize": false
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/v1/monitoring/metrics/query_range",
+      "method": "GET",
+      "output_encoding": "string",
+      "backend": [
+        {
+          "url_pattern": "/api/v1/query_range",
+          "encoding": "string",
+          "method": "GET",
+          "host": ["http://prometheus:9090"],
+          "disable_host_sanitize": false
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/v1/messaging/queues",
+      "method": "GET",
+      "output_encoding": "json",
+      "extra_config": {
+        "qos/ratelimit/router": {
+          "max_rate": 200,
+          "client_max_rate": 20,
+          "strategy": "ip"
+        }
+      },
+      "backend": [
+        {
+          "url_pattern": "/api/queues",
+          "encoding": "json",
+          "method": "GET",
+          "host": ["http://rabbitmq:15672"],
+          "disable_host_sanitize": false
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/v1/messaging/exchanges",
+      "method": "GET",
+      "output_encoding": "json",
+      "backend": [
+        {
+          "url_pattern": "/api/exchanges",
+          "encoding": "json",
+          "method": "GET",
+          "host": ["http://rabbitmq:15672"],
+          "disable_host_sanitize": false
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/v1/artifacts/repositories",
+      "method": "GET",
+      "output_encoding": "json",
+      "extra_config": {
+        "qos/ratelimit/router": {
+          "max_rate": 200,
+          "client_max_rate": 20,
+          "strategy": "ip"
+        }
+      },
+      "backend": [
+        {
+          "url_pattern": "/service/rest/v1/repositories",
+          "encoding": "json",
+          "method": "GET",
+          "host": ["http://nexus:8081"],
+          "disable_host_sanitize": false
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/v1/artifacts/components",
+      "method": "GET",
+      "output_encoding": "json",
+      "backend": [
+        {
+          "url_pattern": "/service/rest/v1/components",
+          "encoding": "json",
+          "method": "GET",
+          "host": ["http://nexus:8081"],
+          "disable_host_sanitize": false
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/v1/dashboards/search",
+      "method": "GET",
+      "output_encoding": "json",
+      "extra_config": {
+        "qos/ratelimit/router": {
+          "max_rate": 200,
+          "client_max_rate": 20,
+          "strategy": "ip"
+        }
+      },
+      "backend": [
+        {
+          "url_pattern": "/api/search",
+          "encoding": "json",
+          "method": "GET",
+          "host": ["http://grafana:3000"],
+          "disable_host_sanitize": false
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/v1/dashboards/{uid}",
+      "method": "GET",
+      "output_encoding": "json",
+      "backend": [
+        {
+          "url_pattern": "/api/dashboards/uid/{uid}",
+          "encoding": "json",
+          "method": "GET",
+          "host": ["http://grafana:3000"],
+          "disable_host_sanitize": false
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/v1/git/projects",
+      "method": "GET",
+      "output_encoding": "json",
+      "extra_config": {
+        "qos/ratelimit/router": {
+          "max_rate": 200,
+          "client_max_rate": 20,
+          "strategy": "ip"
+        }
+      },
+      "backend": [
+        {
+          "url_pattern": "/api/v4/projects",
+          "encoding": "json",
+          "method": "GET",
+          "host": ["http://gitlab:80"],
+          "disable_host_sanitize": false
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/v1/ci/jobs",
+      "method": "GET",
+      "output_encoding": "json",
+      "backend": [
+        {
+          "url_pattern": "/api/json",
+          "encoding": "json",
+          "method": "GET",
+          "host": ["http://jenkins:8081"],
+          "disable_host_sanitize": false
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/v1/storage/health",
+      "method": "GET",
+      "output_encoding": "json",
+      "backend": [
+        {
+          "url_pattern": "/minio/health/live",
+          "encoding": "json",
+          "method": "GET",
+          "host": ["http://minio:9000"],
+          "disable_host_sanitize": false
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/v1/gateway/status",
+      "method": "GET",
+      "output_encoding": "json",
+      "backend": [
+        {
+          "url_pattern": "/__health",
+          "encoding": "json",
+          "method": "GET",
+          "host": ["http://localhost:8000"],
+          "disable_host_sanitize": false
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/v1/gateway/config",
+      "method": "GET",
+      "output_encoding": "json",
+      "backend": [
+        {
+          "url_pattern": "/__debug/config",
+          "encoding": "json",
+          "method": "GET",
+          "host": ["http://localhost:8000"],
+          "disable_host_sanitize": false
+        }
+      ]
+    }
+  ]
+}

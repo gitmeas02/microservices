@@ -11,7 +11,8 @@ class ServiceHealthChecker {
             { name: 'MinIO', port: 9001, element: 4 },
             { name: 'RabbitMQ', port: 15672, element: 5 },
             { name: 'Prometheus', port: 9090, element: 6 },
-            { name: 'Grafana', port: 3001, element: 7 }
+            { name: 'Grafana', port: 3001, element: 7 },
+            { name: 'KrakenD', port: 8000, element: 8 }
         ];
         this.indicators = [];
         this.checkInterval = null;

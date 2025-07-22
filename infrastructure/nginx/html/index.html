@@ -242,11 +242,22 @@
                     <a href="http://localhost:3001" class="service-link secondary">Direct</a>
                 </div>
             </div>
+
+            <!-- API Gateway -->
+            <div class="service-card">
+                <h3><span class="status-indicator"></span>🚪 KrakenD Gateway</h3>
+                <p>High-performance API Gateway with advanced routing, rate limiting, and authentication.</p>
+                <div class="service-links">
+                    <a href="http://api.local" class="service-link">API Gateway</a>
+                    <a href="http://localhost:8000" class="service-link secondary">Direct</a>
+                    <a href="http://localhost:8000/docs" class="service-link secondary">Docs</a>
+                </div>
+            </div>
         </div>
 
         <div class="footer">
-            <p>💡 Add entries to your hosts file for domain routing: <strong>127.0.0.1 auth.local git.local ci.local</strong></p>
-            <p>🔧 Nginx Reverse Proxy running on ports 80 (HTTP) and 443 (HTTPS)</p>
+            <p>💡 Add entries to your hosts file for domain routing: <strong>127.0.0.1 auth.local git.local ci.local api.local</strong></p>
+            <p>🔧 Nginx Reverse Proxy running on ports 80 (HTTP) and 443 (HTTPS) | 🚪 KrakenD API Gateway on port 8000</p>
             <p>📝 Environment: Development | Resource monitoring: <a href="resource-monitor.bat" style="color: #fff;">resource-monitor.bat</a></p>
         </div>
     </div>
